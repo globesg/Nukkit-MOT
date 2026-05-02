@@ -35,18 +35,29 @@ public class EntityWindCharge extends EntityProjectile {
 
     @Override
     public void onCollideWithEntity(Entity entity) {
-        if (directionChanged != null && directionChanged == entity) {
-            return;
+        if (directionChanged != null) {
+            if (directionChanged == entity) {
+                return;
+            }
         }
 
         /*
-         * 风弹撞到末影珍珠：
-         * 1. 让珍珠执行自己的碰撞/传送逻辑；
-         * 2. 直接调用 onHit()，复用风弹撞地面的完整爆炸逻辑。
+         * 修复点：
+         * 风弹主动撞到末影珍珠时，原逻辑只会对珍珠调用 attack(PROJECTILE)，
+         * 但 EntityProjectile#attack 默认只接受 VOID 伤害，所以珍珠不会传送。
+         *
+         * 这里直接调用珍珠自己的 onCollideWithEntity(this)，
+         * 让珍珠按“珍珠碰到实体”的逻辑执行 teleport()。
          */
         if (entity instanceof EntityEnderPearl pearl) {
             pearl.onCollideWithEntity(this);
-            onHit();
+
+            level.addLevelSoundEvent(
+                    entity.getPosition().add(0, 1),
+                    LevelSoundEventPacket.SOUND_WIND_CHARGE_BURST
+            );
+
+            this.kill();
             return;
         }
 
@@ -57,54 +68,78 @@ public class EntityWindCharge extends EntityProjectile {
                 1f
         ));
 
-        knockBack(entity);
-        burst();
-    }
-
-    @Override
-    public void onHit() {
-        for (Entity entity : level.getEntities()) {
-            if (entity instanceof EntityLiving entityLiving) {
-                if (entityLiving.distance(this) < getBurstRadius()) {
-                    this.knockBack(entityLiving);
-                }
-            }
-        }
-
-        burst();
-    }
-
-    /**
-     * 风弹爆炸效果：
-     * 播放爆炸声音、生成风弹爆炸粒子、kill 风弹。
-     */
-    public void burst() {
-        if (this.closed) {
-            return;
-        }
-
-        this.level.addLevelSoundEvent(
-                this.add(0, 1),
+        level.addLevelSoundEvent(
+                entity.getPosition().add(0, 1),
                 LevelSoundEventPacket.SOUND_WIND_CHARGE_BURST
         );
 
-        this.level.addParticle(new GenericParticle(
-                this,
-                Particle.TYPE_WIND_EXPLOSION
-        ));
-
+        knockBack(entity);
         this.kill();
     }
+
+    @Override
+    @Override
+public boolean onUpdate(int currentTick) {
+    if (this.closed) {
+        return false;
+    }
+
+    // 先手动检测风弹附近的末影珍珠，避免高速小实体穿模漏判
+    if (checkEnderPearlCollision()) {
+        return false;
+    }
+
+    boolean hasUpdate = super.onUpdate(currentTick);
+
+    if (this.age > 1200 || this.isCollided) {
+        this.kill();
+        hasUpdate = true;
+    }
+
+    return hasUpdate;
+}
+
+private boolean checkEnderPearlCollision() {
+    // 半径可以调，0.8~1.2 都可以；越大越容易触发
+    double radius = 1.0D;
+    double radiusSquared = radius * radius;
+
+    for (Entity entity : this.level.getEntities()) {
+        if (!(entity instanceof EntityEnderPearl pearl)) {
+            continue;
+        }
+
+        if (pearl.closed) {
+            continue;
+        }
+
+        if (pearl.getLevel() != this.getLevel()) {
+            continue;
+        }
+
+        // 距离检测：风弹靠近珍珠就强制触发珍珠碰撞逻辑
+        if (this.distanceSquared(pearl) <= radiusSquared) {
+            pearl.onCollideWithEntity(this);
+
+            level.addLevelSoundEvent(
+                    pearl.getPosition().add(0, 1),
+                    LevelSoundEventPacket.SOUND_WIND_CHARGE_BURST
+            );
+
+            this.kill();
+            return true;
+        }
+    }
+
+    return false;
+}
 
     @Override
     public boolean attack(EntityDamageEvent source) {
         if (this.directionChanged == null && source instanceof EntityDamageByEntityEvent event) {
             this.directionChanged = event.getDamager();
             this.setMotion(event.getDamager().getDirectionVector());
-            this.level.addParticle(new GenericParticle(
-                    event.getDamager(),
-                    Particle.TYPE_WIND_EXPLOSION
-            ));
+            this.level.addParticle(new GenericParticle(event.getDamager(), Particle.TYPE_WIND_EXPLOSION));
         }
 
         return true;
@@ -116,15 +151,6 @@ public class EntityWindCharge extends EntityProjectile {
             return false;
         }
 
-        /*
-         * 先主动检测附近珍珠。
-         * 因为风弹和珍珠碰撞箱都很小，父类 EntityProjectile 的移动线段碰撞
-         * 在高速相撞时可能漏判，所以这里做一层额外兜底。
-         */
-        if (checkEnderPearlCollision()) {
-            return false;
-        }
-
         boolean hasUpdate = super.onUpdate(currentTick);
 
         if (this.age > 1200 || this.isCollided) {
@@ -133,39 +159,6 @@ public class EntityWindCharge extends EntityProjectile {
         }
 
         return hasUpdate;
-    }
-
-    private boolean checkEnderPearlCollision() {
-        double radius = 1.0D;
-        double radiusSquared = radius * radius;
-
-        for (Entity entity : this.level.getEntities()) {
-            if (!(entity instanceof EntityEnderPearl pearl)) {
-                continue;
-            }
-
-            if (pearl.closed) {
-                continue;
-            }
-
-            if (pearl.getLevel() != this.getLevel()) {
-                continue;
-            }
-
-            if (this.distanceSquared(pearl) <= radiusSquared) {
-                pearl.onCollideWithEntity(this);
-
-                /*
-                 * 这里不要只 burst()。
-                 * 直接 onHit()，这样和风弹撞地面的爆炸逻辑一致：
-                 * 半径击退 + 爆炸声音 + 爆炸粒子 + kill。
-                 */
-                onHit();
-                return true;
-            }
-        }
-
-        return false;
     }
 
     @Override
