@@ -23,8 +23,8 @@ public class EntityEnderPearl extends EntityProjectile {
     /**
      * 实体触碰珍珠的额外检测范围。
      *
-     * 原版珍珠自身宽高只有 0.25，范围太小会漏掉高速风弹/投射物。
-     * 0.35 比较适合模拟“碰到珍珠”。
+     * 珍珠自身宽高只有 0.25，风弹宽高也很小，
+     * 所以这里扩大一点检测范围，避免高速相撞漏判。
      */
     private static final double ENTITY_TOUCH_EXPAND = 0.35D;
 
@@ -73,10 +73,10 @@ public class EntityEnderPearl extends EntityProjectile {
         }
 
         /*
-         * 保留原来的撞方块逻辑：
-         * 撞到方块时传送；
+         * 撞方块逻辑：
+         * 撞到普通方块时传送；
          * 撞到下界传送门时不传送；
-         * mobsFromBlocks 开启时有概率生成螨虫。
+         * mobsFromBlocks 开启时保留原来的螨虫生成逻辑。
          */
         if (this.isCollided && this.shootingEntity instanceof Player) {
             Block[] blocks = getCollisionHelper().getCollisionBlocks();
@@ -99,13 +99,9 @@ public class EntityEnderPearl extends EntityProjectile {
         }
 
         /*
-         * 新增逻辑：
-         * 珍珠每 tick 主动扫描附近实体。
-         * 这样可以实现“任意实体碰到珍珠 -> 珍珠传送”。
-         *
-         * 注意：
-         * 风弹这类投射物如果先更新，可能会先 attack 珍珠并 kill 自己，
-         * 所以下面还额外重写了 attack(...)，专门处理这种情况。
+         * 任意实体碰到珍珠时触发传送。
+         * 如果碰到的是风弹，checkTouchedByAnyEntity() 内部会调用 windCharge.burst()，
+         * 保证风弹爆炸声音和粒子正常播放。
          */
         if (this.shootingEntity instanceof Player && checkTouchedByAnyEntity()) {
             teleport();
@@ -121,11 +117,8 @@ public class EntityEnderPearl extends EntityProjectile {
     }
 
     /**
-     * 新增逻辑：
-     * 如果风弹、箭、雪球、其他实体通过 attack(...) 命中了珍珠，
-     * 也直接触发珍珠传送。
-     *
-     * 这能修复“风弹撞珍珠时，走的是风弹逻辑，不走珍珠 onCollideWithEntity”的问题。
+     * 如果风弹或其他实体通过 attack(...) 命中珍珠，
+     * 也触发珍珠传送。
      */
     @Override
     public boolean attack(EntityDamageEvent source) {
@@ -136,18 +129,17 @@ public class EntityEnderPearl extends EntityProjectile {
         if (this.shootingEntity instanceof Player && source instanceof EntityDamageByEntityEvent damageByEntityEvent) {
             Entity damager = damageByEntityEvent.getDamager();
 
-            // 防止刚扔出去就被发射者自己打回/碰到而立刻触发
             if (damager == this.shootingEntity && this.age < 5) {
                 return false;
             }
 
-            /*
-             * EntityProjectile#attack 默认只接受 VOID 伤害。
-             * 这里手动触发一次事件，给插件取消的机会。
-             */
             this.server.getPluginManager().callEvent(source);
             if (source.isCancelled()) {
                 return false;
+            }
+
+            if (damager instanceof EntityWindCharge windCharge) {
+                windCharge.burst();
             }
 
             teleport();
@@ -160,10 +152,6 @@ public class EntityEnderPearl extends EntityProjectile {
 
     @Override
     public void onCollideWithEntity(Entity entity) {
-        /*
-         * 保留原生逻辑：
-         * 珍珠主动撞到实体时传送。
-         */
         if (this.shootingEntity instanceof Player) {
             teleport();
         }
@@ -183,7 +171,7 @@ public class EntityEnderPearl extends EntityProjectile {
                 continue;
             }
 
-            // 防止刚扔出去就碰到发射者自己
+            // 防止刚扔出去立刻碰到发射者自己
             if (entity == this.shootingEntity && this.age < 5) {
                 continue;
             }
@@ -191,6 +179,16 @@ public class EntityEnderPearl extends EntityProjectile {
             // 观察者不触发
             if (entity instanceof Player player && player.getGamemode() == Player.SPECTATOR) {
                 continue;
+            }
+
+            /*
+             * 关键修复：
+             * 如果是珍珠先扫到了风弹，就主动调用风弹爆炸效果。
+             * 否则这条路径不会进入 EntityWindCharge#onHit 或 onCollideWithEntity，
+             * 就会出现“珍珠传送了，但没有风弹爆炸声音”。
+             */
+            if (entity instanceof EntityWindCharge windCharge) {
+                windCharge.burst();
             }
 
             return true;
