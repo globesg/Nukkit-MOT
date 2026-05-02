@@ -108,20 +108,60 @@ public class EntityWindCharge extends EntityProjectile {
     }
 
     @Override
-    public boolean onUpdate(int currentTick) {
-        if (this.closed) {
-            return false;
-        }
-
-        boolean hasUpdate = super.onUpdate(currentTick);
-
-        if (this.age > 1200 || this.isCollided) {
-            this.kill();
-            hasUpdate = true;
-        }
-
-        return hasUpdate;
+public boolean onUpdate(int currentTick) {
+    if (this.closed) {
+        return false;
     }
+
+    // 先手动检测风弹附近的末影珍珠，避免高速小实体穿模漏判
+    if (checkEnderPearlCollision()) {
+        return false;
+    }
+
+    boolean hasUpdate = super.onUpdate(currentTick);
+
+    if (this.age > 1200 || this.isCollided) {
+        this.kill();
+        hasUpdate = true;
+    }
+
+    return hasUpdate;
+}
+
+private boolean checkEnderPearlCollision() {
+    // 半径可以调，0.8~1.2 都可以；越大越容易触发
+    double radius = 1.0D;
+    double radiusSquared = radius * radius;
+
+    for (Entity entity : this.level.getEntities()) {
+        if (!(entity instanceof EntityEnderPearl pearl)) {
+            continue;
+        }
+
+        if (pearl.closed) {
+            continue;
+        }
+
+        if (pearl.getLevel() != this.getLevel()) {
+            continue;
+        }
+
+        // 距离检测：风弹靠近珍珠就强制触发珍珠碰撞逻辑
+        if (this.distanceSquared(pearl) <= radiusSquared) {
+            pearl.onCollideWithEntity(this);
+
+            level.addLevelSoundEvent(
+                    pearl.getPosition().add(0, 1),
+                    LevelSoundEventPacket.SOUND_WIND_CHARGE_BURST
+            );
+
+            this.kill();
+            return true;
+        }
+    }
+
+    return false;
+}
 
     @Override
     public float getWidth() {
