@@ -14,6 +14,7 @@ import cn.nukkit.math.NukkitMath;
 import cn.nukkit.math.Vector3;
 import cn.nukkit.nbt.tag.CompoundTag;
 import cn.nukkit.network.protocol.LevelEventPacket;
+import cn.nukkit.network.protocol.LevelSoundEventPacket;
 import cn.nukkit.utils.Utils;
 
 public class EntityEnderPearl extends EntityProjectile {
@@ -167,39 +168,57 @@ public class EntityEnderPearl extends EntityProjectile {
      * 检测是否有任意实体碰到珍珠。
      */
     private boolean checkTouchedByAnyEntity() {
-        for (Entity entity : this.level.getCollidingEntities(
-                this.boundingBox.grow(ENTITY_TOUCH_EXPAND, ENTITY_TOUCH_EXPAND, ENTITY_TOUCH_EXPAND),
-                this
-        )) {
-            if (entity == null || entity.closed || entity == this) {
-                continue;
-            }
-
-            // 防止刚扔出去立刻碰到发射者自己
-            if (entity == this.shootingEntity && this.age < 5) {
-                continue;
-            }
-
-            // 观察者不触发
-            if (entity instanceof Player player && player.getGamemode() == Player.SPECTATOR) {
-                continue;
-            }
-
-            /*
-             * 关键修复：
-             * 如果是珍珠先扫到了风弹，不要只播放声音，也不要只 burst()。
-             * 直接调用 windCharge.onHit()，复用风弹撞地面的完整爆炸逻辑。
-             */
-            if (entity instanceof EntityWindCharge windCharge) {
-                windCharge.onHit();
-            }
-
-            return true;
+    for (Entity entity : this.level.getCollidingEntities(
+            this.boundingBox.grow(ENTITY_TOUCH_EXPAND, ENTITY_TOUCH_EXPAND, ENTITY_TOUCH_EXPAND),
+            this
+    )) {
+        if (entity == null || entity.closed || entity == this) {
+            continue;
         }
 
-        return false;
+        // 防止刚扔出去就碰到发射者自己
+        if (entity == this.shootingEntity && this.age < 5) {
+            continue;
+        }
+
+        // 观察者不触发
+        if (entity instanceof Player player && player.getGamemode() == Player.SPECTATOR) {
+            continue;
+        }
+
+        /*
+         * 珍珠先检测到风弹：
+         * 1. 给风弹所在 chunk 的玩家播放风弹爆炸声；
+         * 2. 再额外发给珍珠主人，避免主人还没传送到风弹 chunk 时听不到；
+         * 3. kill 风弹；
+         * 4. return true，让 onUpdate() 继续执行珍珠传送。
+         */
+        if (entity instanceof EntityWindCharge windCharge) {
+            Vector3 soundPos = windCharge.getPosition();
+
+            // 发给风弹所在 chunk 的玩家
+            windCharge.getLevel().addLevelSoundEvent(
+                    soundPos,
+                    LevelSoundEventPacket.SOUND_WIND_CHARGE_BURST
+            );
+
+            // 额外发给珍珠主人，解决“玩家不在对应区块”的问题
+            if (this.shootingEntity instanceof Player shooter && shooter.isOnline()) {
+                windCharge.getLevel().addLevelSoundEvent(
+                        soundPos,
+                        LevelSoundEventPacket.SOUND_WIND_CHARGE_BURST,
+                        new Player[]{shooter}
+                );
+            }
+
+            windCharge.kill();
+        }
+
+        return true;
     }
 
+    return false;
+}
     /**
      * 保留原来的螨虫生成逻辑。
      */
