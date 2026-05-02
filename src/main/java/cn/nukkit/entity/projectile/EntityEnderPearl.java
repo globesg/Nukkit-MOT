@@ -20,6 +20,12 @@ public class EntityEnderPearl extends EntityProjectile {
 
     public static final int NETWORK_ID = 87;
 
+    /**
+     * 实体触碰珍珠的额外检测范围。
+     *
+     * 珍珠自身宽高只有 0.25，风弹宽高也很小，
+     * 所以这里扩大一点检测范围，避免高速相撞漏判。
+     */
     private static final double ENTITY_TOUCH_EXPAND = 0.35D;
 
     @Override
@@ -66,6 +72,12 @@ public class EntityEnderPearl extends EntityProjectile {
             return false;
         }
 
+        /*
+         * 撞方块逻辑：
+         * 撞到普通方块时传送；
+         * 撞到下界传送门时不传送；
+         * mobsFromBlocks 开启时保留原来的螨虫生成逻辑。
+         */
         if (this.isCollided && this.shootingEntity instanceof Player) {
             Block[] blocks = getCollisionHelper().getCollisionBlocks();
             boolean portal = false;
@@ -86,7 +98,11 @@ public class EntityEnderPearl extends EntityProjectile {
             return false;
         }
 
-        // 任意实体碰到珍珠时触发传送；如果碰到风弹，会在 checkTouchedByAnyEntity() 内触发 windCharge.burst()
+        /*
+         * 任意实体碰到珍珠时触发传送。
+         * 如果碰到的是风弹，checkTouchedByAnyEntity() 内部会调用 windCharge.onHit()，
+         * 也就是风弹撞地面的完整爆炸逻辑。
+         */
         if (this.shootingEntity instanceof Player && checkTouchedByAnyEntity()) {
             teleport();
             this.close();
@@ -100,6 +116,10 @@ public class EntityEnderPearl extends EntityProjectile {
         return super.onUpdate(currentTick);
     }
 
+    /**
+     * 如果风弹或其他实体通过 attack(...) 命中珍珠，
+     * 也触发珍珠传送。
+     */
     @Override
     public boolean attack(EntityDamageEvent source) {
         if (this.closed) {
@@ -118,8 +138,12 @@ public class EntityEnderPearl extends EntityProjectile {
                 return false;
             }
 
+            /*
+             * 风弹通过 attack(...) 命中珍珠时，也直接调用 onHit()。
+             * 这样效果等同风弹撞地面：半径击退 + 爆炸声音 + 爆炸粒子。
+             */
             if (damager instanceof EntityWindCharge windCharge) {
-                windCharge.burst();
+                windCharge.onHit();
             }
 
             teleport();
@@ -139,6 +163,9 @@ public class EntityEnderPearl extends EntityProjectile {
         super.onCollideWithEntity(entity);
     }
 
+    /**
+     * 检测是否有任意实体碰到珍珠。
+     */
     private boolean checkTouchedByAnyEntity() {
         for (Entity entity : this.level.getCollidingEntities(
                 this.boundingBox.grow(ENTITY_TOUCH_EXPAND, ENTITY_TOUCH_EXPAND, ENTITY_TOUCH_EXPAND),
@@ -158,9 +185,13 @@ public class EntityEnderPearl extends EntityProjectile {
                 continue;
             }
 
-            // 珍珠先扫到风弹时，也要让风弹爆炸，否则只会珍珠传送，没有风弹音效
+            /*
+             * 关键修复：
+             * 如果是珍珠先扫到了风弹，不要只播放声音，也不要只 burst()。
+             * 直接调用 windCharge.onHit()，复用风弹撞地面的完整爆炸逻辑。
+             */
             if (entity instanceof EntityWindCharge windCharge) {
-                windCharge.burst();
+                windCharge.onHit();
             }
 
             return true;
@@ -169,6 +200,9 @@ public class EntityEnderPearl extends EntityProjectile {
         return false;
     }
 
+    /**
+     * 保留原来的螨虫生成逻辑。
+     */
     private void trySpawnEndermite() {
         if (!Server.getInstance().mobsFromBlocks) {
             return;
