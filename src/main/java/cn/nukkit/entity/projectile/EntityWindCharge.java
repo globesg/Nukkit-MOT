@@ -1,5 +1,7 @@
 package cn.nukkit.entity.projectile;
 
+import cn.nukkit.Player;
+import cn.nukkit.Server;
 import cn.nukkit.entity.Entity;
 import cn.nukkit.entity.EntityLiving;
 import cn.nukkit.event.entity.EntityDamageByEntityEvent;
@@ -10,6 +12,7 @@ import cn.nukkit.level.particle.Particle;
 import cn.nukkit.math.Vector3;
 import cn.nukkit.nbt.tag.CompoundTag;
 import cn.nukkit.network.protocol.LevelSoundEventPacket;
+import cn.nukkit.network.protocol.PlaySoundPacket;
 
 /**
  * @author glorydark
@@ -39,11 +42,7 @@ public class EntityWindCharge extends EntityProjectile {
             return;
         }
 
-        /*
-         * 风弹撞到末影珍珠：
-         * 让珍珠执行自己的碰撞/传送逻辑，
-         * 然后风弹播放爆炸声音 + 粒子 + kill。
-         */
+        // 风弹撞珍珠：让珍珠执行传送，同时风弹播放爆炸效果
         if (entity instanceof EntityEnderPearl pearl) {
             pearl.onCollideWithEntity(this);
             burst();
@@ -75,11 +74,11 @@ public class EntityWindCharge extends EntityProjectile {
     }
 
     /**
-     * 统一风弹爆炸效果。
-     *
-     * 原来声音逻辑分散在 onCollideWithEntity 和 onHit 里。
-     * 现在珍珠主动扫描到风弹时，也可以直接调用这个方法，
-     * 避免“珍珠传送了，但风弹没有爆炸声音”。
+     * 统一风弹爆炸效果：
+     * 1. 发送 LevelSoundEventPacket 的 WIND_CHARGE_BURST；
+     * 2. 发送 PlaySoundPacket 字符串音效 wind_charge.burst 兜底；
+     * 3. 生成风弹爆炸粒子；
+     * 4. kill 风弹。
      */
     public void burst() {
         if (this.closed) {
@@ -91,12 +90,30 @@ public class EntityWindCharge extends EntityProjectile {
                 LevelSoundEventPacket.SOUND_WIND_CHARGE_BURST
         );
 
+        // 兜底：部分客户端/协议下 LevelSoundEvent 可能没有声音，直接播放 Bedrock 字符串音效
+        playWindChargeBurstFallback();
+
         this.level.addParticle(new GenericParticle(
                 this,
                 Particle.TYPE_WIND_EXPLOSION
         ));
 
         this.kill();
+    }
+
+    private void playWindChargeBurstFallback() {
+        PlaySoundPacket pk = new PlaySoundPacket();
+        pk.name = "wind_charge.burst";
+        pk.x = (int) Math.floor(this.x);
+        pk.y = (int) Math.floor(this.y);
+        pk.z = (int) Math.floor(this.z);
+        pk.volume = 4.0f;
+        pk.pitch = 1.0f;
+
+        Server.broadcastPacket(
+                this.level.getChunkPlayers(this.getFloorX() >> 4, this.getFloorZ() >> 4).values(),
+                pk
+        );
     }
 
     @Override
@@ -119,12 +136,7 @@ public class EntityWindCharge extends EntityProjectile {
             return false;
         }
 
-        /*
-         * 先主动检测附近珍珠。
-         * 因为风弹和珍珠碰撞箱都很小，父类 EntityProjectile 的线段碰撞
-         * 可能在高速相撞时漏判。父类确实是通过移动线段查近实体再调用
-         * onCollideWithEntity(...)。这里做一层额外兜底。
-         */
+        // 先主动检测附近珍珠，避免两个小投射物高速相撞时漏判
         if (checkEnderPearlCollision()) {
             return false;
         }
