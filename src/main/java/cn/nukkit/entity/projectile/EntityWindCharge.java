@@ -78,6 +78,35 @@ public class EntityWindCharge extends EntityProjectile {
     }
 
     @Override
+    public void onHit() {
+        for (Entity entity : level.getEntities()) {
+            if (entity instanceof EntityLiving entityLiving) {
+                if (entityLiving.distance(this) < getBurstRadius()) {
+                    this.knockBack(entityLiving);
+                }
+            }
+        }
+
+        level.addLevelSoundEvent(
+                this.add(0, 1),
+                LevelSoundEventPacket.SOUND_WIND_CHARGE_BURST
+        );
+
+        this.kill();
+        this.level.addParticle(new GenericParticle(this, Particle.TYPE_WIND_EXPLOSION));
+    }
+
+    @Override
+    public boolean attack(EntityDamageEvent source) {
+        if (this.directionChanged == null && source instanceof EntityDamageByEntityEvent event) {
+            this.directionChanged = event.getDamager();
+            this.setMotion(event.getDamager().getDirectionVector());
+            this.level.addParticle(new GenericParticle(event.getDamager(), Particle.TYPE_WIND_EXPLOSION));
+        }
+
+        return true;
+    }
+
     @Override
 public boolean onUpdate(int currentTick) {
     if (this.closed) {
@@ -122,7 +151,7 @@ private boolean checkEnderPearlCollision() {
             pearl.onCollideWithEntity(this);
 
             level.addLevelSoundEvent(
-                    pearl.getPosition().add(0, 1),
+                    this.getPosition(),
                     LevelSoundEventPacket.SOUND_WIND_CHARGE_BURST
             );
 
@@ -133,33 +162,6 @@ private boolean checkEnderPearlCollision() {
 
     return false;
 }
-
-    @Override
-    public boolean attack(EntityDamageEvent source) {
-        if (this.directionChanged == null && source instanceof EntityDamageByEntityEvent event) {
-            this.directionChanged = event.getDamager();
-            this.setMotion(event.getDamager().getDirectionVector());
-            this.level.addParticle(new GenericParticle(event.getDamager(), Particle.TYPE_WIND_EXPLOSION));
-        }
-
-        return true;
-    }
-
-    @Override
-    public boolean onUpdate(int currentTick) {
-        if (this.closed) {
-            return false;
-        }
-
-        boolean hasUpdate = super.onUpdate(currentTick);
-
-        if (this.age > 1200 || this.isCollided) {
-            this.kill();
-            hasUpdate = true;
-        }
-
-        return hasUpdate;
-    }
 
     @Override
     public float getWidth() {
