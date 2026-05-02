@@ -196,22 +196,7 @@ public class EntityEnderPearl extends EntityProjectile {
         if (entity instanceof EntityWindCharge windCharge) {
             Vector3 soundPos = windCharge.getPosition();
 
-            // 发给风弹所在 chunk 的玩家
-            windCharge.getLevel().addLevelSoundEvent(
-                    soundPos,
-                    LevelSoundEventPacket.SOUND_WIND_CHARGE_BURST
-            );
-
-            // 额外发给珍珠主人，解决“玩家不在对应区块”的问题
-            if (this.shootingEntity instanceof Player shooter && shooter.isOnline()) {
-                windCharge.getLevel().addLevelSoundEvent(
-                        soundPos,
-                        LevelSoundEventPacket.SOUND_WIND_CHARGE_BURST,
-                        new Player[]{shooter}
-                );
-            }
-
-            windCharge.kill();
+            windCharge.onHit();
         }
 
         return true;
