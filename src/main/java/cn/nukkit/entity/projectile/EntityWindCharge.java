@@ -36,10 +36,43 @@ public class EntityWindCharge extends EntityProjectile {
     @Override
     public void onCollideWithEntity(Entity entity) {
         if (directionChanged != null) {
-            if(directionChanged == entity) return;
+            if (directionChanged == entity) {
+                return;
+            }
         }
-        entity.attack(new EntityDamageByEntityEvent(this, entity, EntityDamageEvent.DamageCause.PROJECTILE, 1f));
-        level.addLevelSoundEvent(entity.getPosition().add(0, 1), LevelSoundEventPacket.SOUND_WIND_CHARGE_BURST);
+
+        /*
+         * 修复点：
+         * 风弹主动撞到末影珍珠时，原逻辑只会对珍珠调用 attack(PROJECTILE)，
+         * 但 EntityProjectile#attack 默认只接受 VOID 伤害，所以珍珠不会传送。
+         *
+         * 这里直接调用珍珠自己的 onCollideWithEntity(this)，
+         * 让珍珠按“珍珠碰到实体”的逻辑执行 teleport()。
+         */
+        if (entity instanceof EntityEnderPearl pearl) {
+            pearl.onCollideWithEntity(this);
+
+            level.addLevelSoundEvent(
+                    entity.getPosition().add(0, 1),
+                    LevelSoundEventPacket.SOUND_WIND_CHARGE_BURST
+            );
+
+            this.kill();
+            return;
+        }
+
+        entity.attack(new EntityDamageByEntityEvent(
+                this,
+                entity,
+                EntityDamageEvent.DamageCause.PROJECTILE,
+                1f
+        ));
+
+        level.addLevelSoundEvent(
+                entity.getPosition().add(0, 1),
+                LevelSoundEventPacket.SOUND_WIND_CHARGE_BURST
+        );
+
         knockBack(entity);
         this.kill();
     }
@@ -53,9 +86,13 @@ public class EntityWindCharge extends EntityProjectile {
                 }
             }
         }
-        level.addLevelSoundEvent(this.add(0, 1), LevelSoundEventPacket.SOUND_WIND_CHARGE_BURST);
-        this.kill();
 
+        level.addLevelSoundEvent(
+                this.add(0, 1),
+                LevelSoundEventPacket.SOUND_WIND_CHARGE_BURST
+        );
+
+        this.kill();
         this.level.addParticle(new GenericParticle(this, Particle.TYPE_WIND_EXPLOSION));
     }
 
@@ -66,6 +103,7 @@ public class EntityWindCharge extends EntityProjectile {
             this.setMotion(event.getDamager().getDirectionVector());
             this.level.addParticle(new GenericParticle(event.getDamager(), Particle.TYPE_WIND_EXPLOSION));
         }
+
         return true;
     }
 
@@ -84,7 +122,6 @@ public class EntityWindCharge extends EntityProjectile {
 
         return hasUpdate;
     }
-
 
     @Override
     public float getWidth() {
@@ -121,9 +158,11 @@ public class EntityWindCharge extends EntityProjectile {
 
     protected void knockBack(Entity entity) {
         Vector3 knockback = new Vector3(entity.motionX, entity.motionY, entity.motionZ);
+
         knockback.x /= 2d;
         knockback.y /= 2d;
         knockback.z /= 2d;
+
         knockback.x -= (this.getX() - entity.getX()) * getKnockbackStrength();
         knockback.y += 1.0f;
         knockback.z -= (this.getZ() - entity.getZ()) * getKnockbackStrength();
