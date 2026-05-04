@@ -3,31 +3,28 @@ package cn.nukkit.block;
 import cn.nukkit.block.properties.enums.OxidizationLevel;
 import org.jetbrains.annotations.NotNull;
 
-/**
- * Adapted from PowerNukkitX (<a href="https://github.com/PowerNukkitX/PowerNukkitX">PowerNukkitX</a>).
- */
-public class BlockLightningRod extends BlockLightningRodBase {
+public class BlockChestCopperOxidized extends BlockChestCopper {
 
-    public BlockLightningRod() {
+    public BlockChestCopperOxidized() {
         this(0);
     }
 
-    public BlockLightningRod(int meta) {
+    public BlockChestCopperOxidized(int meta) {
         super(meta);
     }
 
     @Override
     public String getName() {
-        return "Lightning Rod";
+        return "Oxidized Copper Chest";
     }
 
     @Override
     public int getId() {
-        return LIGHTNING_ROD;
+        return OXIDIZED_COPPER_CHEST;
     }
 
     @Override
     public @NotNull OxidizationLevel getOxidizationLevel() {
-        return OxidizationLevel.UNAFFECTED;
+        return OxidizationLevel.OXIDIZED;
     }
 }

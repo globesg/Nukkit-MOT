@@ -1,5 +1,6 @@
 package cn.nukkit.level.format.leveldb;
 
+import cn.nukkit.level.format.leveldb.structure.BlockStateSnapshot;
 import cn.nukkit.level.format.leveldb.structure.ChunkState;
 import cn.nukkit.nbt.tag.IntTag;
 import cn.nukkit.utils.Binary;
@@ -34,6 +35,59 @@ public class LevelDBConstantsTest {
             break;
         }
         assertEquals(version, LevelDBConstants.STATE_VERSION, "LevelDBConstants.STATE_VERSION mismatch");
+    }
+
+    @Test
+    public void testUpdaterOutputVersionMatchesPalette() {
+        int version1_21_0 = (0 << 8) | (21 << 16) | (1 << 24);
+
+        NbtMap oldSandRed = NbtMap.builder()
+                .putString("name", "minecraft:sand")
+                .putCompound("states", NbtMap.builder()
+                        .putString("sand_type", "red")
+                        .build())
+                .putInt("version", version1_21_0)
+                .build();
+
+        NbtMap updated = BlockStateMapping.get().updateVanillaState(oldSandRed);
+
+        assertEquals(LevelDBConstants.STATE_VERSION, updated.getInt("version"),
+                "Updater output version must match palette STATE_VERSION");
+        assertEquals("minecraft:red_sand", updated.getString("name"));
+        assertFalse(updated.containsKey("sand_type") || updated.getCompound("states").containsKey("sand_type"));
+    }
+
+    @Test
+    public void testOldFormatBlockStateMappedCorrectly() {
+        int version1_21_0 = (0 << 8) | (21 << 16) | (1 << 24);
+
+        NbtMap oldDirtCoarse = NbtMap.builder()
+                .putString("name", "minecraft:dirt")
+                .putCompound("states", NbtMap.builder()
+                        .putString("dirt_type", "coarse")
+                        .build())
+                .putInt("version", version1_21_0)
+                .build();
+
+        NbtMap updated = BlockStateMapping.get().updateVanillaState(oldDirtCoarse);
+        BlockStateSnapshot snapshot = BlockStateMapping.get().getStateUnsafe(updated);
+
+        assertNotNull(snapshot, "Updated coarse_dirt state must exist in palette");
+        assertFalse(snapshot.isCustom(), "Updated coarse_dirt state must not be custom/INFO_UPDATE");
+        assertEquals("minecraft:coarse_dirt", updated.getString("name"));
+    }
+
+    @Test
+    public void testKnownStatePassthroughUnchanged() {
+        NbtMap stone = NbtMap.builder()
+                .putString("name", "minecraft:stone")
+                .putCompound("states", NbtMap.builder().build())
+                .putInt("version", LevelDBConstants.STATE_VERSION)
+                .build();
+
+        BlockStateSnapshot direct = BlockStateMapping.get().getStateUnsafe(stone);
+        assertNotNull(direct, "minecraft:stone must be in palette");
+        assertFalse(direct.isCustom());
     }
 
     @Test
