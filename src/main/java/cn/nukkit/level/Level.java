@@ -264,6 +264,10 @@ public class Level implements ChunkManager, Metadatable {
         randomTickBlocks[Block.OXIDIZED_COPPER_CHAIN] = true;
 
         randomTickBlocks[BlockID.BUDDING_AMETHYST] = true;
+
+        randomTickBlocks[Block.OPEN_EYEBLOSSOM] = true;
+        randomTickBlocks[Block.CLOSED_EYEBLOSSOM] = true;
+        randomTickBlocks[Block.CREAKING_HEART] = true;
     }
 
     @NonComputationAtomic
@@ -5315,7 +5319,9 @@ public class Level implements ChunkManager, Metadatable {
             }
             return GameVersion.V1_20_50_NETEASE;
         }
-        if (protocol >= GameVersion.V1_26_10.getProtocol()) {
+        if (protocol >= GameVersion.V1_26_20_26.getProtocol()) {
+            return GameVersion.V1_26_20;
+        } else if (protocol >= GameVersion.V1_26_10.getProtocol()) {
             return GameVersion.V1_26_10;
         } else if (protocol >= GameVersion.V1_21_110_26.getProtocol()) {
             return GameVersion.V1_21_110;
@@ -5468,7 +5474,8 @@ public class Level implements ChunkManager, Metadatable {
         if (chunk == GameVersion.V1_21_100.getProtocol()) if (player == GameVersion.V1_21_100.getProtocol()) return true;
         if (chunk == GameVersion.V1_21_110.getProtocol())
             if (player >= GameVersion.V1_21_110_26.getProtocol()) if (player <= GameVersion.V1_26_0.getProtocol()) return true;
-        if (chunk == GameVersion.V1_26_10.getProtocol())  if (player >= GameVersion.V1_26_10.getProtocol()) return true;
+        if (chunk == GameVersion.V1_26_10.getProtocol())  if (player == GameVersion.V1_26_10.getProtocol()) return true;
+        if (chunk == GameVersion.V1_26_20.getProtocol())  if (player >= GameVersion.V1_26_20_26.getProtocol()) return true;
         return false; //TODO Multiversion  Remember to update when block palette changes
     }
 
