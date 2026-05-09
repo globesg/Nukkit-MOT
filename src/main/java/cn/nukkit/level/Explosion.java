@@ -20,6 +20,8 @@ import cn.nukkit.level.particle.HugeExplodeSeedParticle;
 import cn.nukkit.level.util.ExplosionSource;
 import cn.nukkit.math.*;
 import cn.nukkit.nbt.tag.CompoundTag;
+import cn.nukkit.Player;
+import cn.nukkit.entity.item.EntityEndCrystal;
 import cn.nukkit.utils.Hash;
 import it.unimi.dsi.fastutil.longs.LongArraySet;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
@@ -243,10 +245,29 @@ public class Explosion {
             entity.attack(damageEvent);
 
             if (!(entity instanceof EntityItem || entity instanceof EntityXPOrb)) {
-                entity.motionX += motion.x * impact;
-                entity.motionY += motion.y * impact;
-                entity.motionZ += motion.z * impact;
-            }
+    boolean noCrystalVerticalKnockback = false;
+
+    if (entity instanceof Player
+            && this.sourceObject instanceof ExplosionSource.EntitySource es
+            && es.entity() instanceof EntityEndCrystal) {
+
+        int crystalY = this.source.getFloorY();
+        int playerY = entity.getFloorY();
+
+        // 玩家脚下 Y 正好在水晶所在 Y 的下一格：取消纵向 KB
+        if (playerY == crystalY - 1) {
+            noCrystalVerticalKnockback = true;
+        }
+    }
+
+    entity.motionX += motion.x * impact;
+
+    if (!noCrystalVerticalKnockback) {
+        entity.motionY += motion.y * impact;
+    }
+
+    entity.motionZ += motion.z * impact;
+}
         }
 
         ItemBlock air = new ItemBlock(Block.get(BlockID.AIR));
